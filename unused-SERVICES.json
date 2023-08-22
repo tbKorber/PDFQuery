@@ -1,0 +1,10 @@
+{
+	"OPENAI": {
+		"key": "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"
+	},
+	"PINECONE": {
+		"key": "675c29ad-309d-44f8-90b2-4de6f431cd8",
+		"env": "us-west4-gcp-free",
+        "index": "langchain-test"
+	}
+}

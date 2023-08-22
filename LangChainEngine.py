@@ -11,7 +11,7 @@ import openai
 
 SERVICE = {
     "OPENAI": {
-        "key": "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"
+        "key": "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"
     },
     "PINECONE": {
         "key": "675c29ad-309d-44f8-90b2-4de6f431cd8d",

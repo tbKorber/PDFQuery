@@ -6,7 +6,7 @@ from time import localtime, strftime
 
 class LCUI:
     def __init__(self):
-                    
+
         # CREATE GUI
 
         # Setting Window
