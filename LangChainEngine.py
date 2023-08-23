@@ -3,34 +3,15 @@ from os.path import exists
 from langchain.document_loaders import OnlinePDFLoader, UnstructuredPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Pinecone
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.llms import OpenAI
 from langchain.chains.question_answering import load_qa_chain
-import pinecone
 import openai
+from LangChainUI import get_lcui_instance
 
-SERVICE = {
-    "OPENAI": {
-        "key": "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"
-    },
-    "PINECONE": {
-        "key": "675c29ad-309d-44f8-90b2-4de6f431cd8d",
-        "env": "us-west4-gcp-free",
-        "index": "langchain-test"
-    }
-}
-
-def initialize_pinecone():
-    pinecone.init(
-        api_key=SERVICE["PINECONE"]["key"],
-        environment=SERVICE["PINECONE"]["env"]
-    )
-    embeddings = OpenAIEmbeddings(openai_api_key=SERVICE["OPENAI"]["key"])
-    index = pinecone.Index(index_name=SERVICE["PINECONE"]["index"])
-    return embeddings, index
+lcui_instance = get_lcui_instance()
 
 def main():
-    embeddings, index = initialize_pinecone()
+    embeddings, index = lcui_instance.initialize_pinecone()
     
     choice = input("Read or Write?: ")
     match choice:
@@ -41,11 +22,11 @@ def main():
             uploadPDF(embeddings)
 
 def queryPDF(embeddings, index, query):
-    llm = OpenAI(temperature=0, openai_api_key=SERVICE["OPENAI"]["key"])
+    llm = OpenAI(temperature=0, openai_api_key=LCUI.ui.openaikey)
     chain = load_qa_chain(llm, chain_type="stuff")
 
     # if __name__ == 'main' : query = input("Query: ")
-    openai.api_key = SERVICE["OPENAI"]["key"]
+    openai.api_key = LCUI.ui.openaikey
     query_response = openai.Embedding.create(
         model="text-embedding-ada-002",
         input=query
@@ -104,7 +85,7 @@ def uploadPDF(embeddings, pdf):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     texts = text_splitter.split_documents(data)
 
-    Pinecone.from_texts([t.page_content for t in texts], embeddings, index_name=SERVICE["PINECONE"]["index"])
+    Pinecone.from_texts([t.page_content for t in texts], embeddings, index_name=LCUI.ui.headerindexreference.get())
 
     return "Upload Success" if True else "Upload Failed"
 

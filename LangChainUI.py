@@ -3,6 +3,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox
 import pinecone
+from langchain.embeddings.openai import OpenAIEmbeddings
 from time import localtime, strftime
 from os.path import exists
 import json as json
@@ -11,10 +12,13 @@ class LCUI:
     def __init__(self):
 
         self.configpath = 'config/config.json'
-        self.configexists = exists(self.configpath)
+        self.configexists = None
+        self.checkconfigexists()
 
-        self.openaikey = self.pineconekey = self.pineconeenv = None
+        self.embeddings = self.index = self.openaikey = self.pineconekey = self.pineconeenv = None
         self.readconfig()
+
+        self.index_list = None
 
         # CREATE GUI
         # Setting Window
@@ -30,7 +34,7 @@ class LCUI:
         self.root.config(menu=self.topmenu)
 
         self.options = tk.Menu(self.topmenu)
-        self.topmenu.add_cascade(label="Settings", menu=self.options)
+        self.topmenu.add_cascade(label="Options", menu=self.options)
         self.options.add_command(label="Config", command=self.setconfig)
         self.options.add_separator()
         self.options.add_command(label="Exit", command=self.root.quit)
@@ -63,6 +67,11 @@ class LCUI:
         ### Notebook ###
         self.notebook = ttk.Notebook(self.menuframe)
 
+        ### Create Index Frame ###
+        # Create Index Grid Frame for Label and Entry (Parent: MenuFrame)
+        self.createindexframe = ttk.Frame(self.notebook)
+        self.createindexframe.grid(row=0, column=0, sticky='n', padx=5, pady=5)
+
         ### Upload Frame ###
         # Upload Section Grid Frame for Label and Entry (Parent: MenuFrame)
         self.uploadframe = ttk.Frame(self.notebook)
@@ -72,6 +81,50 @@ class LCUI:
         # Query Section Grid Frame for Label and Entry (Parent: MenuFrame)
         self.queryframe = ttk.Frame(self.notebook)
         self.queryframe.grid(row=0, column=1, sticky='n', padx=5, pady=5)
+
+        ### Create Index Section ###
+        # Section Label (Parent: CreateIndexFrame)
+        self.createindexlabel = ttk.Label(self.createindexframe, text="Create new Index on Pinecone", font=("Arial", 14))
+        self.createindexlabel.grid(row=0, column=0, sticky="we", pady=5)
+
+        # Grid Frame for Creating Index Label and Inputs (Parent: CreateIndexFrame)
+        self.createindexinputframe = ttk.Frame(self.createindexframe)
+        self.createindexinputframe.columnconfigure(0, weight=1)
+        self.createindexinputframe.columnconfigure(1, weight=8)
+        self.createindexinputframe.grid(row=1, column=0, sticky="we", pady=5)
+
+        # Create Index name Label (Parent: CreateIndexInputFrame)
+        self.createindexnamelabel = ttk.Label(self.createindexinputframe, text="Index Name:", font=("Arial", 8))
+        self.createindexnamelabel.grid(row=0, column=0, sticky='e')
+
+        # Create Index name Entry (Parent: CreateIndexInputFrame)
+        self.createindexname = ttk.Entry(self.createindexinputframe)
+        self.createindexname.grid(row=0, column=1, sticky='we', padx=20, pady=5)
+
+        # Create Index dimension Label (Parent: CreateIndexInputFrame)
+        self.createindexdimensionlabel = ttk.Label(self.createindexinputframe, text="Dimension:", font=("Arial", 8))
+        self.createindexdimensionlabel.grid(row=1, column=0, sticky='e')
+
+        # Create Index dimension Entry (Parent: CreateIndexInputFrame)
+        self.createindexdimension = ttk.Entry(self.createindexinputframe)
+        self.createindexdimension.insert(0,"1536")
+        self.createindexdimension.grid(row=1, column=1, sticky='we', padx=20, pady= 5)
+
+        # Create Index metric Label (Parent: CreateIndexInputFrame)
+        self.createindexmetriclabel = ttk.Label(self.createindexinputframe, text="Metric", font=("Arial", 8))
+        self.createindexmetriclabel.grid(row=2, column=0, sticky='e')
+
+        # Create Index metric Combobox (Parent: CreateIndexInputFrame)
+        self.createindexmetric = ttk.Combobox(self.createindexinputframe, values=["euclidean", "cosine", "dotproduct"])
+        self.createindexmetric.grid(row=2, column=1, sticky="we", padx=20, pady=5)
+
+        # Create Index pod type Label (Parent: CreateIndexInputFrame)
+        self.createindexpodtypelabel = ttk.Label(self.createindexinputframe, text="Pod Type:", font=("Arial", 8))
+        self.createindexpodtypelabel.grid(row=3, column=0, sticky='e')
+
+        # Create Index pod type Combobox (Parent: CreateIndexInputFrame)
+        self.createindexpodtype = ttk.Combobox(self.createindexinputframe, values=["s1.x1", "s1.x2", "s1.x4", "s1.x8", "p1.x1", "p1.x2", "p1.x4", "p1.x8", "p2.x1", "p2.x2", "p2.x4", "p2.x8"])
+        self.createindexpodtype.grid(row=3, column=1, sticky="we", padx=20, pady=5)
 
         ### Upload Section ###
         # Section Label (Parent: UploadFrame)
@@ -135,12 +188,17 @@ class LCUI:
 
         self.notebook.add(self.uploadframe, text="Upload")
         self.notebook.add(self.queryframe, text="Query")
+        self.notebook.add(self.createindexframe, text="Create Index")
         self.notebook.grid(row=0, column=0)
 
         self.menuframe.pack(fill='both')
 
         self.root.after(0, self.initialize_and_run)
         self.root.mainloop()
+
+    def checkconfigexists(self):
+        self.configexists = exists(self.configpath)
+        return
 
     def readconfig(self):
         if(self.configexists):
@@ -152,6 +210,9 @@ class LCUI:
         return
 
     def setconfig(self):
+
+        self.checkconfigexists()
+        self.readconfig()
 
         popup = tk.Toplevel(self.root)
         popup.title("Config Settings")
@@ -187,58 +248,58 @@ class LCUI:
         pineconeenventry.grid(row=1, column=1)
 
         btnsaveconfig = ttk.Button(popup, text="Save", command=lambda:self.saveconfig(popup, openaikeyentry.get(), pineconekeyentry.get(), pineconeenventry.get()))
-        btnsaveconfig.pack()
+        btnsaveconfig.pack(pady=5)
         return
     
     def saveconfig(self, configwindow, openaikey, pineconekey, pineconeenv):
-        if(len(openaikey)!= 0 and len(pineconekey) != 0 and len(pineconeenv) != 0):
+        if len(openaikey) != 0 and len(pineconekey) != 0 and len(pineconeenv) != 0:
             config_entries = {
                 "OPENAI": {
                     "key": openaikey
                 },
-                "PINECONE":{
+                "PINECONE": {
                     "key": pineconekey,
                     "env": pineconeenv
                 }
             }
-            print(self.configexists)
-            match self.configexists:
-                case True:
-                    with open(self.configpath, 'w+') as config:
-                        data = json.load(config)
-                        newdata = {
-                            "OPENAI": {
-                                "key": config_entries["OPENAI"]["key"]
-                            },
-                            "PINECONE": {
-                                "key": config_entries["PINECONE"]["key"],
-                                "env": config_entries["PINECONE"]["env"]                        }
+
+            if self.configexists:
+                with open(self.configpath, 'r') as config:
+                    data = json.load(config)
+                    newdata = {
+                        "OPENAI": {
+                            "key": config_entries["OPENAI"]["key"]
+                        },
+                        "PINECONE": {
+                            "key": config_entries["PINECONE"]["key"],
+                            "env": config_entries["PINECONE"]["env"]
                         }
-                        json.dump(newdata, config, indent=2, sort_keys=True)
-                        pass
-                case False:
-                    with open(self.configpath, 'w') as config:
-                        data = {
-                            "OPENAI": {
-                                "key": config_entries["OPENAI"]["key"]
-                            },
-                            "PINECONE": {
-                                "key": config_entries["PINECONE"]["key"],
-                                "env": config_entries["PINECONE"]["env"]
-                            }
+                    }
+                with open(self.configpath, 'w') as config:
+                    json.dump(newdata, config, indent=2, sort_keys=True)
+            else:
+                with open(self.configpath, 'w') as config:
+                    data = {
+                        "OPENAI": {
+                            "key": config_entries["OPENAI"]["key"]
+                        },
+                        "PINECONE": {
+                            "key": config_entries["PINECONE"]["key"],
+                            "env": config_entries["PINECONE"]["env"]
                         }
-                        json.dump(data, config, indent=2, sort_keys=True)
-                        pass
-            print (config_entries)
+                    }
+                    json.dump(data, config, indent=2, sort_keys=True)
+
             configwindow.destroy()
-            return
         else:
             errormessage = ""
-            for i, e in enumerate([openaikey, pineconekey, pineconeenv]):
-                if(len(e) == 0):
-                    if(i != 0):
+            n = 0
+            for e in [openaikey, pineconekey, pineconeenv]:
+                if len(e) == 0:
+                    n += 1
+                    if n != 0:
                         errormessage += ", "
-                    match i:
+                    match n:
                         case 0:
                             errormessage += "Open AI key"
                         case 1:
@@ -248,14 +309,15 @@ class LCUI:
             errormessage += " fields cannot be empty!"
             messagebox.showerror(title="ERROR", message=f"{errormessage}")
 
+
     def getallindexes(self, addnone): # Lists out all Indexes. Bool adds '--None--' in list
         pinecone.init(
-            api_key=LCE.SERVICE["PINECONE"]["key"],
-            environment=LCE.SERVICE["PINECONE"]["env"]
+            api_key=self.pineconekey,
+            environment=self.pineconeenv
         )
 
-        index_list = pinecone.list_indexes()
-        return_value = index_list
+        self.index_list = pinecone.list_indexes()
+        return_value = self.index_list
         # print(return_value)
 
         if addnone:
@@ -343,7 +405,16 @@ class LCUI:
         return
 
     def initialize_pinecone(self):
-        embeddings, index =  LCE.initialize_pinecone()
-        return embeddings, index
+        pinecone.init(
+            api_key = self.pineconekey,
+            environment = self.pineconeenv
+        )
+        self.embeddings = OpenAIEmbeddings(openai_api_key=self.openaikey)
+        self.index = pinecone.Index(index_name=self.headerindexreference.get())
 
-ui = LCUI()
+        return self.embeddings, self.index
+    
+def get_lcui_instance():
+    return LCUI()
+
+# ui = LCUI()
