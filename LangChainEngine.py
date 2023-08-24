@@ -22,11 +22,11 @@ def main():
             uploadPDF(embeddings)
 
 def queryPDF(embeddings, index, query):
-    llm = OpenAI(temperature=0, openai_api_key=LCUI.ui.openaikey)
+    llm = OpenAI(temperature=0, openai_api_key=lcui_instance.openaikey)
     chain = load_qa_chain(llm, chain_type="stuff")
 
     # if __name__ == 'main' : query = input("Query: ")
-    openai.api_key = LCUI.ui.openaikey
+    openai.api_key = lcui_instance.openaikey
     query_response = openai.Embedding.create(
         model="text-embedding-ada-002",
         input=query
@@ -85,7 +85,7 @@ def uploadPDF(embeddings, pdf):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     texts = text_splitter.split_documents(data)
 
-    Pinecone.from_texts([t.page_content for t in texts], embeddings, index_name=LCUI.ui.headerindexreference.get())
+    Pinecone.from_texts([t.page_content for t in texts], embeddings, index_name=lcui_instance.headerindexreference.get())
 
     return "Upload Success" if True else "Upload Failed"
 
