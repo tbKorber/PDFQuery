@@ -6,7 +6,7 @@ from langchain.vectorstores import Pinecone
 from langchain.llms import OpenAI
 from langchain.chains.question_answering import load_qa_chain
 import openai
-from LangChainUI import get_lcui_instance
+from LangChainUI import get_lcui_instance, OpenAIEmbeddings, pinecone
 
 lcui_instance = get_lcui_instance()
 
@@ -21,7 +21,7 @@ def main():
         case "Write" | "write" | "w" | "W":
             uploadPDF(embeddings)
 
-def queryPDF(embeddings, index, query):
+def queryPDF(embeddings: OpenAIEmbeddings, index: pinecone.Index, query: str):
     llm = OpenAI(temperature=0, openai_api_key=lcui_instance.openaikey)
     chain = load_qa_chain(llm, chain_type="stuff")
 

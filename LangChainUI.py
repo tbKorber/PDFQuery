@@ -116,6 +116,7 @@ class LCUI:
 
         # Create Index metric Combobox (Parent: CreateIndexInputFrame)
         self.createindexmetric = ttk.Combobox(self.createindexinputframe, values=["euclidean", "cosine", "dotproduct"])
+        self.createindexmetric.set("cosine")
         self.createindexmetric.grid(row=2, column=1, sticky="we", padx=20, pady=5)
 
         # Create Index pod type Label (Parent: CreateIndexInputFrame)
@@ -124,12 +125,21 @@ class LCUI:
 
         # Create Index pod type Combobox (Parent: CreateIndexInputFrame)
         self.createindexpodtype = ttk.Combobox(self.createindexinputframe, values=["s1.x1", "s1.x2", "s1.x4", "s1.x8", "p1.x1", "p1.x2", "p1.x4", "p1.x8", "p2.x1", "p2.x2", "p2.x4", "p2.x8"])
+        self.createindexpodtype.set("p1.x1")
         self.createindexpodtype.grid(row=3, column=1, sticky="we", padx=20, pady=5)
+
+        # Create Index button (Parent: CreateIndexInputFrame)
+        self.btncreateindex = ttk.Button(self.createindexinputframe, text="Create Index", command=self.createindex)
+        self.btncreateindex.grid(row=4, column=0, sticky='e', pady=5)
+
+        # Create Index Error Box (Parent: CreateIndexInputFrame)
+        self.createindexerrorbox = tk.Text(self.createindexinputframe, height=6, font=("Arial", 10), state='disabled')
+        self.createindexerrorbox.grid(row=4, column=1, sticky='we', padx=20, pady=5)
 
         ### Upload Section ###
         # Section Label (Parent: UploadFrame)
         self.uploadlabel = ttk.Label(self.uploadframe, text="Upload PDF to Pinecone", font=("Arial", 14))
-        self.uploadlabel.grid(row=0, column=0, sticky="we", pady=5)
+        self.uploadlabel.grid(row=0, column=0, sticky="we", padx=5, pady=5)
 
         # Grid Frame for Uploading Label and Entry (Parent: UploadFrame)
         self.uploadentryframe = ttk.Frame(self.uploadframe)
@@ -196,6 +206,22 @@ class LCUI:
         self.root.after(0, self.initialize_and_run)
         self.root.mainloop()
 
+    def edit_textbox(self, box: tk.Text, string: str, isdelete: bool):
+        box.configure(state='normal')
+        if(isdelete):
+            box.delete('1.0', tk.END)
+        box.insert('1.0', string)
+        box.configure(state='disabled')
+        return
+
+    def createindex(self):
+        try:
+            pinecone.create_index(name=self.createindexname.get(), dimension=int(self.createindexdimension.get()), metric=self.createindexmetric.get(), pod_type=self.createindexpodtype.get())
+        
+        except Exception as e:
+            self.edit_textbox(self.createindexerrorbox, f"Error creating index: {str(e)}", True)
+        return
+
     def checkconfigexists(self):
         self.configexists = exists(self.configpath)
         return
@@ -251,7 +277,7 @@ class LCUI:
         btnsaveconfig.pack(pady=5)
         return
     
-    def saveconfig(self, configwindow, openaikey, pineconekey, pineconeenv):
+    def saveconfig(self, configwindow: tk.Toplevel, openaikey: str, pineconekey: str, pineconeenv: str):
         if len(openaikey) != 0 and len(pineconekey) != 0 and len(pineconeenv) != 0:
             config_entries = {
                 "OPENAI": {
@@ -310,7 +336,7 @@ class LCUI:
             messagebox.showerror(title="ERROR", message=f"{errormessage}")
 
 
-    def getallindexes(self, addnone): # Lists out all Indexes. Bool adds '--None--' in list
+    def getallindexes(self, addnone: bool): # Lists out all Indexes. Bool adds '--None--' in list
         pinecone.init(
             api_key=self.pineconekey,
             environment=self.pineconeenv
@@ -328,9 +354,6 @@ class LCUI:
         return return_value
 
     def getindexinfo(self): # Print Index Information
-        self.indexinfobox.configure(state='normal')
-        self.indexinfobox.delete('1.0', tk.END)
-
         try:
 
             # indexes = self.getallindexes(False)
@@ -350,20 +373,15 @@ class LCUI:
             information += f"    Metric: {index_info.metric}\n"
             information += "\n"
 
-            self.indexinfobox.insert('1.0', information)
+            self.edit_textbox(self.indexinfobox, information, True)
 
         except Exception as e:
-            self.indexinfobox.insert('1.0', f"Error fetching index information: {str(e)}")
+            self.edit_textbox(self.indexinfobox, f"Error fetching index information: {str(e)}", True)
 
-        finally:
-            self.indexinfobox.configure(state='disabled')
         return
 
-    def updateuploadstatus(self, status): # Updates the Uploading Status
-        self.indexinfobox.configure(state='normal')
-        self.indexinfobox.delete('1.0', tk.END)
-        self.indexinfobox.insert('1.0', f"Upload Status: {status}")
-        self.indexinfobox.configure(state='disabled')
+    def updateuploadstatus(self, status: str): # Updates the Uploading Status
+        self.edit_textbox(self.indexinfobox, f"Upload Status: {status}", True)
         return
 
     def start_uploadPDFButton(self):
@@ -371,7 +389,7 @@ class LCUI:
         self.uploadPDFButton(self.embeddings, self.url)
         return
 
-    def uploadPDFButton(self, embeddings, url):
+    def uploadPDFButton(self, embeddings: OpenAIEmbeddings, url: str):
         self.updateuploadstatus("Uploading...")
         self.updateuploadstatus(LCE.uploadPDF(embeddings, url))
         return
@@ -381,16 +399,13 @@ class LCUI:
         self.queryPDFButton(self.embeddings, self.index, self.query)
         return
         
-    def queryPDFButton(self, embeddings, index, query):
-        self.queryresponse.configure(state='normal')
-        self.querybox.delete(0, tk.END)
-        self.queryresponse.delete('1.0', tk.END)
+    def queryPDFButton(self, embeddings: OpenAIEmbeddings, index: pinecone.Index, query: str):
         chain_result = LCE.queryPDF(embeddings, index, query)
-        self.queryresponse.insert('1.0', chain_result) 
-        self.queryresponse.configure(state='disabled')
+        self.edit_textbox(self.queryresponse, chain_result, True)
+        self.querybox.delete(0, tk.END)
         return
 
-    def submit(self, event, location): # If Enter/Return is pressed
+    def submit(self, event, location: str): # If Enter/Return is pressed
         if event.state == 0 and event.keysym == 'Return':
             match location:
                 case 'query':
