@@ -1,4 +1,5 @@
-import LangChainEngine as LCE
+from typing import List
+from langchain_utils import uploadPDF, queryPDF
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox
@@ -15,7 +16,7 @@ class LCUI:
         self.configexists = None
         self.checkconfigexists()
 
-        self.embeddings = self.index = self.openaikey = self.pineconekey = self.pineconeenv = None
+        self.embeddings = self.index = self.openaikey = self.pineconekey = self.pineconeenv = self.lastindex = None
         self.readconfig()
 
         self.index_list = None
@@ -26,6 +27,7 @@ class LCUI:
         self.root.geometry("600x500")
         self.root.title("PDFQuery")
         self.root.resizable(False, False)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.style = ttk.Style()
         self.style.theme_use("default")
@@ -56,7 +58,7 @@ class LCUI:
 
         # Index Selector (Parent: HeaderIndexFrame)
         self.headerindexreference = ttk.Combobox(self.headerindexframe, values=self.getallindexes(True))
-        self.headerindexreference.set("Choose Index")
+        self.headerindexreference.set(self.lastindex)
         self.headerindexreference.grid(row=0, column=1, sticky="w", padx=20, pady=5)\
 
         # Grid Frame for the Query and Upload Sections (Parent: Root)
@@ -196,8 +198,8 @@ class LCUI:
         self.queryresponse = tk.Text(self.queryframe, height=12, font=("Arial", 10), state='disabled')
         self.queryresponse.grid(row=3, column=0, padx=20, pady=5, sticky='we')
 
-        self.notebook.add(self.uploadframe, text="Upload")
         self.notebook.add(self.queryframe, text="Query")
+        self.notebook.add(self.uploadframe, text="Upload")
         self.notebook.add(self.createindexframe, text="Create Index")
         self.notebook.grid(row=0, column=0)
 
@@ -230,9 +232,11 @@ class LCUI:
         if(self.configexists):
             with open(self.configpath, 'r') as config:
                 data = json.load(config)
-                self.openaikey = data["OPENAI"]["key"]
-                self.pineconekey = data["PINECONE"]["key"]
-                self.pineconeenv = data["PINECONE"]["env"]
+                self.openaikey = data["SERVICES"]["OPENAI"]["key"]
+                self.pineconekey = data["SERVICES"]["PINECONE"]["key"]
+                self.pineconeenv = data["SERVICES"]["PINECONE"]["env"]
+
+                self.lastindex = data["SETTINGS"]["lastindex"]
         return
 
     def setconfig(self):
@@ -292,28 +296,18 @@ class LCUI:
             if self.configexists:
                 with open(self.configpath, 'r') as config:
                     data = json.load(config)
-                    newdata = {
-                        "OPENAI": {
-                            "key": config_entries["OPENAI"]["key"]
-                        },
-                        "PINECONE": {
-                            "key": config_entries["PINECONE"]["key"],
-                            "env": config_entries["PINECONE"]["env"]
-                        }
-                    }
+                    data["SERVICES"]["OPENAI"]["key"] = config_entries["SERVICES"]["OPENAI"]["key"]
+                    data["SERVICES"]["PINECONE"]["key"] = config_entries["SERVICES"]["PINECONE"]["key"]
+                    data["SERVICES"]["PINECONE"]["env"] = config_entries["SERVICES"]["PINECONE"]["env"]
                 with open(self.configpath, 'w') as config:
-                    json.dump(newdata, config, indent=2, sort_keys=True)
+                    json.dump(data, config, indent=2, sort_keys=True)
             else:
                 with open(self.configpath, 'w') as config:
-                    data = {
-                        "OPENAI": {
-                            "key": config_entries["OPENAI"]["key"]
-                        },
-                        "PINECONE": {
-                            "key": config_entries["PINECONE"]["key"],
-                            "env": config_entries["PINECONE"]["env"]
-                        }
-                    }
+                    data = json.load(config)
+                    data["SERVICES"]["OPENAI"]["key"] = config_entries["SERVICES"]["OPENAI"]["key"]
+                    data["SERVICES"]["PINECONE"]["key"] = config_entries["SERVICES"]["PINECONE"]["key"]
+                    data["SERVICES"]["PINECONE"]["env"] = config_entries["SERVICES"]["PINECONE"]["env"]
+                    
                     json.dump(data, config, indent=2, sort_keys=True)
 
             configwindow.destroy()
@@ -336,7 +330,7 @@ class LCUI:
             messagebox.showerror(title="ERROR", message=f"{errormessage}")
 
 
-    def getallindexes(self, addnone: bool): # Lists out all Indexes. Bool adds '--None--' in list
+    def getallindexes(self, addnone: bool) -> List[str]: # Lists out all Indexes. Bool adds '--None--' in list
         pinecone.init(
             api_key=self.pineconekey,
             environment=self.pineconeenv
@@ -386,22 +380,14 @@ class LCUI:
 
     def start_uploadPDFButton(self):
         self.url = self.pdfreference.get()
-        self.uploadPDFButton(self.embeddings, self.url)
-        return
-
-    def uploadPDFButton(self, embeddings: OpenAIEmbeddings, url: str):
         self.updateuploadstatus("Uploading...")
-        self.updateuploadstatus(LCE.uploadPDF(embeddings, url))
+        self.updateuploadstatus(uploadPDF(indexname=self.headerindexreference.get(), embeddings=self.embeddings, pdf=self.url))
         return
 
     def start_queryPDFButton(self):
         self.query = self.querybox.get()
-        self.queryPDFButton(self.embeddings, self.index, self.query)
-        return
-        
-    def queryPDFButton(self, embeddings: OpenAIEmbeddings, index: pinecone.Index, query: str):
-        chain_result = LCE.queryPDF(embeddings, index, query)
-        self.edit_textbox(self.queryresponse, chain_result, True)
+        chain_result = queryPDF(openaikey=self.openaikey, embeddings=self.embeddings, index=self.index, query=self.query)
+        self.edit_textbox(box=self.queryresponse, string=chain_result, isdelete=True),
         self.querybox.delete(0, tk.END)
         return
 
@@ -429,7 +415,19 @@ class LCUI:
 
         return self.embeddings, self.index
     
+    def on_closing(self):
+        with open(self.configpath, 'r+') as config:
+            data = json.load(config)
+
+            data["SETTINGS"]["lastindex"] = self.headerindexreference.get()
+
+            config.seek(0)
+            json.dump(data, config, indent=2, sort_keys=True)
+            # config.truncate()
+        self.root.destroy()
+        return
+
 def get_lcui_instance():
     return LCUI()
 
-# ui = LCUI()
+ui = LCUI()
