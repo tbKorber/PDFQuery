@@ -91,11 +91,3 @@ def is_local(url):
     if url_parsed.scheme in ('file', ''):
         return exists(url_parsed.path)
     return False
-
-def combine_documents_chain(documents):
-
-    combined_text = ""
-    for doc in documents:
-        combined_text += doc + "\n\n"
-
-    return combined_text

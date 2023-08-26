@@ -32,7 +32,7 @@ class LCUI:
         self.style = ttk.Style()
         self.style.theme_use("default")
 
-        self.topmenu = tk.Menu(self.root)
+        self.topmenu = tk.Menu(self.root, tearoff=False)
         self.root.config(menu=self.topmenu)
 
         self.options = tk.Menu(self.topmenu)
@@ -57,8 +57,9 @@ class LCUI:
         self.headerindexlabel.grid(row=0, column=0, sticky="e")
 
         # Index Selector (Parent: HeaderIndexFrame)
-        self.headerindexreference = ttk.Combobox(self.headerindexframe, values=self.getallindexes(True))
-        self.headerindexreference.set(self.lastindex)
+        self.headerindexreference = ttk.Combobox(self.headerindexframe, values=self.getallindexes(addnone=True))
+        combobox_element = self.lastindex if self.lastindex in self.getallindexes(addnone=False) else "--None--"
+        self.headerindexreference.set(combobox_element)
         self.headerindexreference.grid(row=0, column=1, sticky="w", padx=20, pady=5)\
 
         # Grid Frame for the Query and Upload Sections (Parent: Root)
