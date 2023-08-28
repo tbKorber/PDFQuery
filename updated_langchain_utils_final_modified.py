@@ -1,6 +1,10 @@
 # langchain_utils.py
 
 from urllib.parse import urlparse
+import urllib.request
+import requests
+from pypdf import PdfReader
+from io import BytesIO
 from os.path import exists
 from langchain import LLMChain
 # from langchain.prompts import PromptTemplate
@@ -23,16 +27,63 @@ from langchain.schema import SystemMessage
 from langchain.embeddings.openai import OpenAIEmbeddings
 from sentence_transformers import SentenceTransformer
 import pinecone
+import json as json
 
-sbert_model = SentenceTransformer('paraphrase-distilroberta-base-v1')
+# sbert_model = SentenceTransformer('paraphrase-distilroberta-base-v1')
 
-def queryPDF(openaikey, embeddings, index, query):
-    try:
+
+class SBERT_Encoder:
+    def __init__(self, model_name='paraphrase-distilroberta-base-v1'):
+       self.model = SentenceTransformer(model_name)
+    
+    def encode_queries(self, queries):
+        # Ensure queries is a list
+        if not isinstance(queries, list):
+            queries = [queries]
+        encoded = self.model.encode(queries, convert_to_tensor=True)
+        # Add an additional dimension
+        encoded = encoded.unsqueeze(0)
+        return encoded
+
+    def encode(self, text):
+        # Ensure text is a list
+        if not isinstance(text, list):
+            text = [text]
+        encoded = self.model.encode(text, convert_to_tensor=True)
+        # Add an additional dimension
+        encoded = encoded.unsqueeze(0)
+        return encoded
+
+def extract_text_from_remote_pdf(url):
+    # Step 1: Stream the content of the remote PDF
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # Check if request was successful
+
+    # Step 2: Use BytesIO to convert the content stream to a file-like object
+    pdf_content = BytesIO(response.content)
+
+    # Step 3: Pass the file-like object to PdfReader and extract text
+    reader = PdfReader(pdf_content)
+    text = ""
+    for page_num in range(len(reader.pages)):
+        text += reader.pages[page_num].extract_text()
+    
+    return text
+
+def queryPDF(path, openaikey, embeddings, index, indexname, query):
+    # try:
+        with open(path, 'r') as config:
+            data = json.load(config)
+            pdf_urls: list = data["SETTINGS"]["INDEXES"][indexname]["urls"]
+        corpus = []
+        for url in pdf_urls:
+            corpus.append(extract_text_from_remote_pdf(url))
+
         llm = ChatOpenAI(temperature=0.2, openai_api_key=openaikey, verbose=True)
         system_message = SystemMessage(content="You are a PDF Search Engine. You answer queries with revelant info from the provided PDF from a Pinecone index already chosen.")
-        print(f"emb: {embeddings}\nidx: {index}")
-        sbert_encoder = lambda text: sbert_model.encode([text], convert_to_tensor=True)
-        retriever = PineconeHybridSearchRetriever(index=index, embeddings=embeddings, sparse_encoder=sbert_encoder)
+        encoder = SentenceTransformer('paraphrase-distilroberta-base-v1')
+        corpus_embeddings = encoder.encode(corpus)
+        retriever = PineconeHybridSearchRetriever(index=index, embeddings=corpus_embeddings)
         prompt = OpenAIFunctionsAgent.create_prompt(system_message=system_message)
         llm_chain = LLMChain(llm=llm, prompt=prompt, verbose=True)
         combine_chain = StuffDocumentsChain(llm_chain=llm_chain, document_separator="\n\n", document_variable_name="input", verbose=True)
@@ -45,10 +96,10 @@ def queryPDF(openaikey, embeddings, index, query):
         agent_executor = AgentExecutor(agent=agent, tools=tool_kit, verbose=True)
         response = agent_executor.run(query)
         return response
-    except Exception as e:
-        error = f"{e}"
-        print(error)
-        return error
+    # except Exception as e:
+    #     error = f"{e}"
+    #     print(error)
+    #     return error
 
 # @tool    
 def run_search(query, retrieval: RetrievalQA):

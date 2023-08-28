@@ -1,5 +1,6 @@
 from typing import List
-from langchain_utils import uploadPDF, queryPDF
+# from langchain_utils import uploadPDF, queryPDF
+from updated_langchain_utils_final_modified import uploadPDF, queryPDF
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox
@@ -16,10 +17,8 @@ class LCUI:
         self.configexists = None
         self.checkconfigexists()
 
-        self.embeddings = self.index = self.openaikey = self.pineconekey = self.pineconeenv = self.lastindex = None
+        self.embeddings = self.index = self.openaikey = self.pineconekey = self.pineconeenv = self.lastindex = self.index_list = None
         self.readconfig()
-
-        self.index_list = None
 
         # CREATE GUI
         # Setting Window
@@ -136,7 +135,7 @@ class LCUI:
         self.btncreateindex.grid(row=4, column=0, sticky='e', pady=5)
 
         # Create Index Error Box (Parent: CreateIndexInputFrame)
-        self.createindexerrorbox = tk.Text(self.createindexinputframe, height=6, font=("Arial", 10), state='disabled')
+        self.createindexerrorbox = tk.Text(self.createindexinputframe, height=6, font=("Arial", 10), wrap=tk.WORD, state=tk.DISABLED)
         self.createindexerrorbox.grid(row=4, column=1, sticky='we', padx=20, pady=5)
 
         ### Upload Section ###
@@ -164,7 +163,7 @@ class LCUI:
         self.btnupload.grid(row=2, column=0, pady=5)
 
         # Information Box where Status and Index Information is printed (Parent: UploadFrame)
-        self.indexinfobox = tk.Text(self.uploadframe, height=10, font=("Arial", 10), state='disabled')
+        self.indexinfobox = tk.Text(self.uploadframe, height=10, font=("Arial", 10),wrap=tk.WORD, state=tk.DISABLED)
         self.indexinfobox.grid(row=3, column=0, padx=20, pady=5)
 
         # Button to request Index Information (Parent: UploadFrame)
@@ -196,7 +195,7 @@ class LCUI:
         self.btnquery.grid(row=2, column=0, pady= 5)
 
         # Query Response (Parent: QueryFrame)
-        self.queryresponse = tk.Text(self.queryframe, height=12, font=("Arial", 10), state='disabled')
+        self.queryresponse = tk.Text(self.queryframe, height=12, font=("Arial", 10),wrap=tk.WORD, state=tk.DISABLED)
         self.queryresponse.grid(row=3, column=0, padx=20, pady=5, sticky='we')
 
         self.notebook.add(self.queryframe, text="Query")
@@ -210,11 +209,11 @@ class LCUI:
         self.root.mainloop()
 
     def edit_textbox(self, box: tk.Text, string: str, isdelete: bool):
-        box.configure(state='normal')
+        box.configure(state=tk.NORMAL)
         if(isdelete):
             box.delete('1.0', tk.END)
         box.insert('1.0', string)
-        box.configure(state='disabled')
+        box.configure(state=tk.DISABLED)
         return
 
     def createindex(self):
@@ -241,6 +240,10 @@ class LCUI:
         return
 
     def setconfig(self):
+
+        config_struct = {
+            "OpenAI": {}
+        }
 
         self.checkconfigexists()
         self.readconfig()
@@ -338,6 +341,7 @@ class LCUI:
         )
 
         self.index_list = pinecone.list_indexes()
+                
         return_value = self.index_list
         # print(return_value)
 
@@ -387,7 +391,7 @@ class LCUI:
 
     def start_queryPDFButton(self):
         self.query = self.querybox.get()
-        chain_result = queryPDF(openaikey=self.openaikey, embeddings=self.embeddings, index=self.index, query=self.query)
+        chain_result = queryPDF(path=self.configpath, openaikey=self.openaikey, embeddings=self.embeddings, index=self.index, indexname=self.headerindexreference.get(), query=self.query)
         self.edit_textbox(box=self.queryresponse, string=chain_result, isdelete=True),
         self.querybox.delete(0, tk.END)
         return
@@ -411,10 +415,10 @@ class LCUI:
             api_key = self.pineconekey,
             environment = self.pineconeenv
         )
-        self.embeddings = OpenAIEmbeddings(openai_api_key=self.openaikey)
-        self.index = pinecone.Index(index_name=self.headerindexreference.get())
+        embeddings = OpenAIEmbeddings(openai_api_key=self.openaikey)
+        index = pinecone.Index(index_name=self.headerindexreference.get())
 
-        return self.embeddings, self.index
+        return embeddings, index
     
     def on_closing(self):
         with open(self.configpath, 'r+') as config:

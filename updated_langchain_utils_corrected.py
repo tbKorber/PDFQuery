@@ -26,6 +26,17 @@ import pinecone
 
 sbert_model = SentenceTransformer('paraphrase-distilroberta-base-v1')
 
+
+from sentence_transformers import SentenceTransformer
+
+class SBERT_Encoder:
+    def __init__(self, model_name='paraphrase-distilroberta-base-v1'):
+        self.model = SentenceTransformer(model_name)
+    
+    def encode_queries(self, queries):
+        return self.model.encode(queries, convert_to_tensor=True)
+
+
 def queryPDF(openaikey, embeddings, index, query):
     try:
         llm = ChatOpenAI(temperature=0.2, openai_api_key=openaikey, verbose=True)
