@@ -9,6 +9,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from time import localtime, strftime
 from os.path import exists
 import json as json
+from dotwiz import DotWiz, make_dot_wiz
 
 class LCUI:
     def __init__(self):
@@ -31,10 +32,10 @@ class LCUI:
         self.style = ttk.Style()
         self.style.theme_use("default")
 
-        self.topmenu = tk.Menu(self.root, tearoff=False)
+        self.topmenu = tk.Menu(self.root)
         self.root.config(menu=self.topmenu)
 
-        self.options = tk.Menu(self.topmenu)
+        self.options = tk.Menu(self.topmenu, tearoff=0)
         self.topmenu.add_cascade(label="Options", menu=self.options)
         self.options.add_command(label="Config", command=self.setconfig)
         self.options.add_separator()
@@ -231,63 +232,168 @@ class LCUI:
     def readconfig(self):
         if(self.configexists):
             with open(self.configpath, 'r') as config:
-                data = json.load(config)
-                self.openaikey = data["SERVICES"]["OPENAI"]["key"]
-                self.pineconekey = data["SERVICES"]["PINECONE"]["key"]
-                self.pineconeenv = data["SERVICES"]["PINECONE"]["env"]
+                data = DotWiz(json.load(config))
+                self.openaikey = data.SERVICES.OPENAI.key
+                self.pineconekey = data.SERVICES.PINECONE.key
+                self.pineconeenv = data.SERVICES.PINECONE.env
 
-                self.lastindex = data["SETTINGS"]["lastindex"]
+                self.lastindex = data.SETTINGS.lastindex
         return
 
-    def setconfig(self):
+    def setserviceconfig(self, parent, format):
+        serviceidx = 0
+        serviceelements = []
+        for service in format:
+            if serviceidx != 0: serviceidx += 1
+            label = ttk.Label(parent, text=format[service].section)
+            label.grid(row=serviceidx, column=0)
+            serviceidx += 1
+            frame = ttk.Frame(parent)
+            frame.columnconfigure(0, weight=1)
+            frame.columnconfigure(1, weight=6)
+            frame.grid(row=serviceidx, column=0)
 
-        config_struct = {
-            "OpenAI": {}
-        }
+            fieldidx = 0
+            fieldelements = []
+            for field in format[service]:
+                if(field != "section"):
+                    fieldlabel = ttk.Label(frame, text=format[service][field].field)
+                    fieldlabel.grid(row=fieldidx, column=0, sticky='e')
+                    fieldentry = ttk.Entry(frame, width=60)
+                    format[service][field].entry = fieldentry
+                    if(self.configexists): fieldentry.insert(0, format[service][field].value)
+                    fieldentry.grid(row=fieldidx, column=1)
+                    fieldelements.append(fieldlabel, fieldentry)
+                    fieldidx += 1
+            serviceelements.append(label, fieldelements)
+        return serviceelements
+    
+    def setindexesconfig(self, parent):
+        indexidx = 0
+        indexelements = []
+        with open(self.configpath, 'r') as config:
+            data = DotWiz(json.load(config))
+            for index in data.SETTINGS.INDEXES.keys():
+                label = ttk.Label(parent, text=index)
+                label.grid(row=indexidx, column=0)
+                entry = ttk.Entry(parent, width=60)
+                entry.insert(0, data.SETTINGS.INDEXES[index].url)
+                entry.grid(row=indexidx, column=1, pady=5)
+                indexelements.append((label, entry))
+                indexidx += 1
+
+        return indexelements
+
+    def setconfig(self):
 
         self.checkconfigexists()
         self.readconfig()
 
         popup = tk.Toplevel(self.root)
         popup.title("Config Settings")
-        popup.geometry("300x150")
+        popup.geometry("500x200")
 
-        openailabel = ttk.Label(popup, text="OpenAI")
-        openailabel.pack()
-        openaiframe = ttk.Frame(popup)
-        openaiframe.columnconfigure(0, weight=1)
-        openaiframe.columnconfigure(1, weight=6)
-        openaiframe.pack()
-        openaikeylabel = ttk.Label(openaiframe, text="Key")
-        openaikeylabel.grid(row=0, column=0, sticky='e')
-        openaikeyentry = ttk.Entry(openaiframe)
-        if(self.configexists): openaikeyentry.insert(0, self.openaikey)
-        openaikeyentry.grid(row=0, column=1)
+        notebook = ttk.Notebook(popup)
 
-        pineconelabel = ttk.Label(popup, text="Pinecone")
-        pineconelabel.pack()
-        pineconeframe = ttk.Frame(popup)
-        pineconeframe.columnconfigure(0, weight=1)
-        pineconeframe.columnconfigure(1, weight=6)
-        pineconeframe.pack()
-        pineconekeylabel = ttk.Label(pineconeframe, text="Key")
-        pineconekeylabel.grid(row=0, column=0, sticky='e')
-        pineconekeyentry = ttk.Entry(pineconeframe)
-        if(self.configexists): pineconekeyentry.insert(0, self.pineconekey)
-        pineconekeyentry.grid(row=0, column=1)
-        pineconeenvlabel = ttk.Label(pineconeframe, text="Environment")
-        pineconeenvlabel.grid(row=1, column=0, sticky='e')
-        pineconeenventry = ttk.Entry(pineconeframe)
-        if(self.configexists): pineconeenventry.insert(0, self.pineconeenv)
-        pineconeenventry.grid(row=1, column=1)
+        serviceframe = ttk.Frame(notebook)
+        serviceframe.columnconfigure(0, weight=1)
+        indexesframe = ttk.Frame(notebook)
+        indexesframe.columnconfigure(0, weight=1)
 
-        btnsaveconfig = ttk.Button(popup, text="Save", command=lambda:self.saveconfig(popup, openaikeyentry.get(), pineconekeyentry.get(), pineconeenventry.get()))
-        btnsaveconfig.pack(pady=5)
+        serviceformat = DotWiz({
+            "OPENAI": {
+                "section": "OpenAI",
+                "key": {
+                    "field": "key",
+                    "value": self.openaikey,
+                    "entry": None
+                }
+            },
+            "PINECONE": {
+                "section": "Pinecone",
+                "key": {
+                    "field": "key",
+                    "value": self.pineconekey,
+                    "entry": None
+                },
+                "env": {
+                    "field": "env",
+                    "value": self.pineconeenv,
+                    "entry": None
+                }
+            }
+        })
+
+        serviceelements = self.setserviceconfig(parent=serviceframe, format=serviceformat)
+        
+        servicesaveframe = ttk.Frame(serviceframe)
+        btnsaveconfig = ttk.Button(servicesaveframe, text="SAVE", command=lambda:self.saveserviceconfig(elements=serviceelements, label=savestatusentry))
+        btnsaveconfig.grid(row=0, column=0, padx=5, pady=5)
+        savestatusentry = ttk.Label(servicesaveframe, text="Don't forget to save!", font=("Arial", 8))
+        savestatusentry.grid(row=0, column=1, padx=5, pady=5)
+        servicesaveframe.grid(row=len(serviceformat.keys())*2, column=0)
+
+        serviceframe.pack(fill=tk.BOTH, ipadx=10, ipady=10)
+
+        indexelements = self.setindexesconfig(parent=indexesframe)
+
+        indexessaveframe = ttk.Frame(indexesframe)
+        btnsaveconfig = ttk.Button(indexessaveframe, text="SAVE", command=lambda:self.saveindexesconfig(elements=indexelements, label=savestatusentry))
+        btnsaveconfig.grid(row=0, column=0, padx=5, pady=5)
+        savestatusentry = ttk.Label(indexessaveframe, text="Don't forget to save!", font=("Arial", 8))
+        savestatusentry.grid(row=0, column=1, padx=5, pady=5)
+        indexessaveframe.grid(row=len(serviceformat.keys())*2, column=0)
+
+        indexesframe.pack(fill=tk.BOTH, ipadx=10, ipady=10)
+        notebook.add(serviceframe, text="Services")
+        notebook.add(indexesframe, text="Indexes")
+        notebook.pack(fill=tk.BOTH)
+
         return
     
-    def saveconfig(self, configwindow: tk.Toplevel, openaikey: str, pineconekey: str, pineconeenv: str):
+    def saveindexesconfig(self, elements, label):
+        if self.configexists:
+            with open(self.configpath, 'r') as config:
+                data = DotWiz(json.load(config))
+                newdata = DotWiz({"INDEXES":[]})
+
+                for index in elements:
+                    dwv = make_dot_wiz([("url", index[1])])
+                    dw = make_dot_wiz([(index[0], dwv)])
+                    newdata.INDEXES.append(dw)
+
+                data.SETTINGS = newdata
+            with open(self.configpath, 'w') as config:
+                json.dump(data.to_dict(), config, indent=2, sort_keys=True)
+        else:
+            with open(self.configpath, 'w') as config:
+                data = DotWiz(json.load(config))
+                newdata = DotWiz({"INDEXES": []})
+
+                for index in elements:
+                    dwv = make_dot_wiz([("url", index[1])])
+                    dw = make_dot_wiz([(index[0], dwv)])
+                    newdata.INDEXES.append(dw)
+
+                data.SETTINGS = newdata
+                
+                json.dump(data.to_dict(), config, indent=2, sort_keys=True)
+        label["text"] = "Saved!"
+
+        return
+    
+    def saveserviceconfig(self, elements, label):
+        notemptycheck = []
+        for entries in elements[1]:
+            if type(entries) == ttk.Entry:
+                notemptycheck.append(len(entries.get()) != 0)
+        ispass = not(False in notemptycheck)
+
+        if(ispass):
+            
+
         if len(openaikey) != 0 and len(pineconekey) != 0 and len(pineconeenv) != 0:
-            config_entries = {
+            config_entries = DotWiz({
                 "OPENAI": {
                     "key": openaikey
                 },
@@ -295,34 +401,34 @@ class LCUI:
                     "key": pineconekey,
                     "env": pineconeenv
                 }
-            }
+            })
 
             if self.configexists:
                 with open(self.configpath, 'r') as config:
-                    data = json.load(config)
-                    data["SERVICES"]["OPENAI"]["key"] = config_entries["SERVICES"]["OPENAI"]["key"]
-                    data["SERVICES"]["PINECONE"]["key"] = config_entries["SERVICES"]["PINECONE"]["key"]
-                    data["SERVICES"]["PINECONE"]["env"] = config_entries["SERVICES"]["PINECONE"]["env"]
+                    data = DotWiz(json.load(config))
+                    data.SERVICES.OPENAI.key = config_entries.OPENAI.key
+                    data.SERVICES.PINECONE.key = config_entries.PINECONE.key
+                    data.SERVICES.PINECONE.env = config_entries.PINECONE.env
                 with open(self.configpath, 'w') as config:
                     json.dump(data, config, indent=2, sort_keys=True)
             else:
                 with open(self.configpath, 'w') as config:
                     data = json.load(config)
-                    data["SERVICES"]["OPENAI"]["key"] = config_entries["SERVICES"]["OPENAI"]["key"]
-                    data["SERVICES"]["PINECONE"]["key"] = config_entries["SERVICES"]["PINECONE"]["key"]
-                    data["SERVICES"]["PINECONE"]["env"] = config_entries["SERVICES"]["PINECONE"]["env"]
+                    data.SERVICES.OPENAI.key = config_entries.SERVICES.OPENAI.key
+                    data.SERVICES.PINECONE.key = config_entries.SERVICES.PINECONE.key
+                    data.SERVICES.PINECONE.env = config_entries.SERVICES.PINECONE.env
                     
                     json.dump(data, config, indent=2, sort_keys=True)
-
-            configwindow.destroy()
+            label["text"] = "Saved!"
         else:
             errormessage = ""
+            plural = ""
             n = 0
             for e in [openaikey, pineconekey, pineconeenv]:
                 if len(e) == 0:
-                    n += 1
                     if n != 0:
                         errormessage += ", "
+                        plural = "s"
                     match n:
                         case 0:
                             errormessage += "Open AI key"
@@ -330,8 +436,10 @@ class LCUI:
                             errormessage += "Pinecone key"
                         case 2:
                             errormessage += "Pinecone Environment"
-            errormessage += " fields cannot be empty!"
+                    n += 1
+            errormessage += f" field{plural} cannot be empty!"
             messagebox.showerror(title="ERROR", message=f"{errormessage}")
+            label["text"] = "Error"
 
 
     def getallindexes(self, addnone: bool) -> List[str]: # Lists out all Indexes. Bool adds '--None--' in list

@@ -28,6 +28,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from sentence_transformers import SentenceTransformer
 import pinecone
 import json as json
+from dotwiz import DotWiz
 
 # sbert_model = SentenceTransformer('paraphrase-distilroberta-base-v1')
 
@@ -71,10 +72,10 @@ def extract_text_from_remote_pdf(url):
     return text
 
 def queryPDF(path, openaikey, embeddings, index, indexname, query):
-    # try:
+    try:
         with open(path, 'r') as config:
-            data = json.load(config)
-            pdf_urls: list = data["SETTINGS"]["INDEXES"][indexname]["urls"]
+            data = DotWiz(json.load(config))
+            pdf_urls: list = data.SETTINGS.INDEXES[indexname].urls
         corpus = []
         for url in pdf_urls:
             corpus.append(extract_text_from_remote_pdf(url))
@@ -96,15 +97,15 @@ def queryPDF(path, openaikey, embeddings, index, indexname, query):
         agent_executor = AgentExecutor(agent=agent, tools=tool_kit, verbose=True)
         response = agent_executor.run(query)
         return response
-    # except Exception as e:
-    #     error = f"{e}"
-    #     print(error)
-    #     return error
+    except Exception as e:
+        error = f"{e}"
+        print(error)
+        return error
 
 # @tool    
 def run_search(query, retrieval: RetrievalQA):
     result = retrieval.run(query)
-    print(result)
+    # print(result)
     return result
 
 def uploadPDF(embeddings: OpenAIEmbeddings, indexname: str, pdf):
